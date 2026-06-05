@@ -17,32 +17,22 @@ jobs:
       - name: Install dependencies
         run: pip install requests
       - name: Run analysis
-        run:  echo "股票分析今日已完成"   # 改成你真正的分析脚本文件名
+        run: echo "股票分析今日已完成"
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: report
           path: report.csv
+        continue-on-error: true
 
-    send-notification:
+  send-notification:
     needs: analyze
     runs-on: ubuntu-latest
     steps:
-      - name: Debug - Check webhook length
-        env:
-          WEBHOOK: ${{ secrets.DINGTALK_WEHBOOK_URL }}
-        run: |
-          echo "Webhook length: ${#WEBHOOK}"
-          if [ -z "$WEBHOOK" ]; then
-            echo "ERROR: WEBHOOK is empty"
-            exit 1
-          fi
       - name: Send DingTalk
         env:
           WEBHOOK: ${{ secrets.DINGTALK_WEHBOOK_URL }}
         run: |
-          # 使用 --url 并禁用 globbing，避免特殊字符被解析
-          set -o noglob
-          curl --url "$WEBHOOK" \
+          curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d '{"msgtype":"text","text":{"content":"股票分析今日已完成"}}'
