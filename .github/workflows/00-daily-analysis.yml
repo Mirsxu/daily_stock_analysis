@@ -24,14 +24,25 @@ jobs:
           name: report
           path: report.csv
 
-  send-notification:
+    send-notification:
     needs: analyze
     runs-on: ubuntu-latest
     steps:
+      - name: Debug - Check webhook length
+        env:
+          WEBHOOK: ${{ secrets.DINGTALK_WEHBOOK_URL }}
+        run: |
+          echo "Webhook length: ${#WEBHOOK}"
+          if [ -z "$WEBHOOK" ]; then
+            echo "ERROR: WEBHOOK is empty"
+            exit 1
+          fi
       - name: Send DingTalk
         env:
           WEBHOOK: ${{ secrets.DINGTALK_WEHBOOK_URL }}
         run: |
-          curl -X POST "$WEBHOOK" \
-            -H "Content-Type: application/json" \
+          # 使用 --url 并禁用 globbing，避免特殊字符被解析
+          set -o noglob
+          curl --url "$WEBHOOK" \
+            -H 'Content-Type: application/json' \
             -d '{"msgtype":"text","text":{"content":"股票分析今日已完成"}}'
