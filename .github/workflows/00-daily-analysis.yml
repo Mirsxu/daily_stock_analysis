@@ -31,8 +31,8 @@ jobs:
     steps:
       - name: Send DingTalk
         env:
-          WEBHOOK: ${{ secrets.DINGTALK_WEHBOOK_URL }}
+           WEBHOOK_URL: ${{ secrets.DINGTALK_WEBBOOK_URL }}
         run: |
-          curl -X POST "$WEBHOOK" \
+          curl -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d '{"msgtype":"text","text":{"content":"股票分析今日已完成"}}'
+            -d '{"msgtype":"text","text":{"content":"股票 今日分析已完成"}}'
