@@ -38,7 +38,11 @@ jobs:
     needs: analyze
     runs-on: ubuntu-latest
     steps:
-      - name: Send DingTalk with AI analysis
+      - name: Download AI report
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-report
+      - name: Send DingTalk with AI Report
         env:
           WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
         run: |
@@ -47,8 +51,7 @@ jobs:
           else
             REPORT="AI分析报告未生成"
           fi
-          # 转义双引号和换行符
-          ESCAPED=$(echo "$REPORT" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          ESCAPED_REPORT=$(echo "$REPORT" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
           curl -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"股票 ${ESCAPED}\"}}"
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"股票 ${ESCAPED_REPORT}\"}}"
