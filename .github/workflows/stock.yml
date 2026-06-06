@@ -22,7 +22,7 @@ jobs:
       - name: Run analysis
         env:
           STOCK_LIST: ${{ secrets.STOCK_LIST }}
-        run: python stock_analysis.py
+        run: python $GITHUB_WORKSPACE/stock_analysis.py
       
       - name: Upload report
         uses: actions/upload-artifact@v4
