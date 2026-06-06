@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from openai import OpenAI
+import akshare as ak
 
 # ---------- 配置 ----------
 STOCK_LIST_STR = os.getenv('STOCK_LIST', '002015.SZ, 000681.SZ, 603990.SS, 002137.SZ')
@@ -16,16 +17,38 @@ INDEX_LIST = {
 }
 
 def get_stock_name(symbol):
-    """通过 yfinance 获取股票中文名称"""
+    """自动获取 A 股中文简称（带缓存）"""
+    code = symbol.split('.')[0]
+    if not hasattr(get_stock_name, 'cache'):
+        get_stock_name.cache = {}
+    if code in get_stock_name.cache:
+        return get_stock_name.cache[code]
     try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
-        # 优先使用 longName，其次 shortName
-        name = info.get('longName') or info.get('shortName') or symbol
-        # 如果名称还是代码，尝试用中文简写（可选）
+        # 优先用东方财富个股信息接口
+        info = ak.stock_individual_info_em(symbol=code)
+        name = info[info['item'] == '股票简称']['value'].values[0]
+        get_stock_name.cache[code] = name
         return name
-    except Exception:
-        return symbol
+    except Exception as e:
+        print(f"AKShare 名称获取失败 ({code}): {e}, 尝试实时行情...")
+        try:
+            spot = ak.stock_zh_a_spot()
+            row = spot[spot['代码'] == code]
+            if not row.empty:
+                name = row['名称'].values[0]
+                get_stock_name.cache[code] = name
+                return name
+        except Exception as e2:
+            print(f"实时行情获取失败: {e2}")
+        # 最后备用
+        try:
+            ticker = yf.Ticker(symbol)
+            name = ticker.info.get('longName') or ticker.info.get('shortName') or code
+            get_stock_name.cache[code] = name
+            return name
+        except:
+            get_stock_name.cache[code] = code
+            return code
 
 def get_index_data():
     index_text = "【大盘指数】\n"
@@ -110,7 +133,7 @@ def main():
     
     for symbol in STOCK_LIST:
         print(f"处理 {symbol}...")
-        stock_name = get_stock_name(symbol)   # 获取中文名称
+        stock_name = get_stock_name(symbol)
         close, change_pct, volume = get_stock_data(symbol)
         if close is None:
             results.append({'股票名称': stock_name, '代码': symbol, '错误': '数据获取失败'})
