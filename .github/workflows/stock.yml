@@ -33,7 +33,16 @@ jobs:
           name: ai-report
           path: analysis_report.txt
         continue-on-error: true
-      - name: Send DingTalk directly
+
+  send-notification:
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download AI report
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-report
+      - name: Send DingTalk with AI Report (Markdown)
         env:
           WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
         run: |
@@ -42,7 +51,10 @@ jobs:
           else
             REPORT="AI分析报告未生成"
           fi
+          # 转义双引号和换行，用于JSON
           ESCAPED_REPORT=$(echo "$REPORT" | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          # Markdown消息内容
+          MESSAGE="### 📊 股票分析报告\n${ESCAPED_REPORT}"
           curl -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"股票 ${ESCAPED_REPORT}\"}}"
+            -d "{\"msgtype\":\"markdown\",\"markdown\":{\"title\":\"每日分析\",\"text\":\"${MESSAGE}\"}}"
