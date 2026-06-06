@@ -10,18 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+      
       - name: Install dependencies
-        run: pip install requests
+        run: pip install yfinance pandas requests
+      
       - name: Run analysis
-        run: echo "股票分析今日已完成"
+        env:
+          STOCK_LIST: ${{ secrets.STOCK_LIST }}
+        run: python stock_analysis.py
+      
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: report
+          name: stock-report
           path: report.csv
         continue-on-error: true
 
@@ -35,4 +41,4 @@ jobs:
         run: |
           curl -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d '{"msgtype":"text","text":{"content":"股票 今日分析已完成"}}'
+            -d '{"msgtype":"text","text":{"content":"股票 今日分析已完成，报告已生成"}}'
