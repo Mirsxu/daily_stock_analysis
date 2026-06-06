@@ -8,15 +8,26 @@ from openai import OpenAI
 STOCK_LIST_STR = os.getenv('STOCK_LIST', '002015.SZ, 000681.SZ, 603990.SS, 002137.SZ')
 STOCK_LIST = [s.strip() for s in STOCK_LIST_STR.split(',')]
 
-# 主要指数（用于大盘情绪）
+# 主要指数
 INDEX_LIST = {
     '上证指数': '000001.SS',
     '深证成指': '399001.SZ',
     '创业板指': '399006.SZ'
 }
 
+def get_stock_name(symbol):
+    """通过 yfinance 获取股票中文名称"""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        # 优先使用 longName，其次 shortName
+        name = info.get('longName') or info.get('shortName') or symbol
+        # 如果名称还是代码，尝试用中文简写（可选）
+        return name
+    except Exception:
+        return symbol
+
 def get_index_data():
-    """获取主要指数数据，返回格式化的文本"""
     index_text = "【大盘指数】\n"
     for name, symbol in INDEX_LIST.items():
         try:
@@ -30,12 +41,11 @@ def get_index_data():
                 index_text += f"{name}: {close_today:.2f} ({change_pct:+.2f}%), 成交量:{volume/1e8:.2f}亿\n"
             else:
                 index_text += f"{name}: 数据不足\n"
-        except Exception as e:
+        except:
             index_text += f"{name}: 获取失败\n"
     return index_text
 
 def get_stock_data(symbol):
-    """获取单只股票最新收盘价和涨跌幅"""
     try:
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period='2d')
@@ -46,11 +56,10 @@ def get_stock_data(symbol):
         change_pct = (close_today - close_yest) / close_yest * 100
         volume = hist['Volume'].iloc[-1]
         return close_today, change_pct, volume
-    except Exception as e:
+    except Exception:
         return None, None, None
 
-def call_deepseek_for_analysis(symbol, close, change_pct, volume, index_info):
-    """调用DeepSeek API，获取包含买卖区间、仓位、止盈止损等详细分析"""
+def call_deepseek_for_analysis(stock_name, symbol, close, change_pct, volume, index_info):
     api_key = os.getenv('DEEPSEEK_API_KEY')
     if not api_key:
         return "AI分析失败: 未配置 DEEPSEEK_API_KEY"
@@ -58,7 +67,7 @@ def call_deepseek_for_analysis(symbol, close, change_pct, volume, index_info):
     prompt = f"""你是A股短线交易专家。根据以下提供的个股数据和大盘情况，给出操作建议。
 
 【个股数据】
-股票代码: {symbol}
+股票名称: {stock_name} (代码: {symbol})
 最新收盘价: {close:.2f}
 涨跌幅: {change_pct:+.2f}%
 成交量: {int(volume)} 股
@@ -90,45 +99,37 @@ def call_deepseek_for_analysis(symbol, close, change_pct, volume, index_info):
             temperature=0.3,
             max_tokens=600
         )
-        analysis = response.choices[0].message.content
-        return analysis
+        return response.choices[0].message.content
     except Exception as e:
         return f"AI调用失败: {str(e)}"
 
-# ---------- 主流程 ----------
 def main():
-    # 获取大盘数据
     index_info = get_index_data()
-    
-    # 存储每只股票的分析结果
     results = []
     full_report = f"AI股票分析报告 - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{index_info}\n"
     
     for symbol in STOCK_LIST:
         print(f"处理 {symbol}...")
+        stock_name = get_stock_name(symbol)   # 获取中文名称
         close, change_pct, volume = get_stock_data(symbol)
         if close is None:
-            results.append({'股票代码': symbol, '错误': '数据获取失败'})
-            full_report += f"\n## {symbol}\n错误: 数据获取失败\n"
+            results.append({'股票名称': stock_name, '代码': symbol, '错误': '数据获取失败'})
+            full_report += f"\n## {stock_name} ({symbol})\n错误: 数据获取失败\n"
             continue
         
-        # 调用AI分析
-        ai_analysis = call_deepseek_for_analysis(symbol, close, change_pct, volume, index_info)
+        ai_analysis = call_deepseek_for_analysis(stock_name, symbol, close, change_pct, volume, index_info)
         
-        # 保存结果
         results.append({
-            '股票代码': symbol,
+            '股票名称': stock_name,
+            '代码': symbol,
             '收盘价': round(close, 2),
             '涨跌幅(%)': round(change_pct, 2),
             'AI分析': ai_analysis
         })
-        full_report += f"\n## {symbol}\n{ai_analysis}\n"
+        full_report += f"\n## {stock_name} ({symbol})\n{ai_analysis}\n"
     
-    # 生成CSV报告（可选）
     df = pd.DataFrame(results)
     df.to_csv('report.csv', index=False, encoding='utf-8-sig')
-    
-    # 保存文本报告供钉钉发送
     with open('analysis_report.txt', 'w', encoding='utf-8') as f:
         f.write(full_report)
     
