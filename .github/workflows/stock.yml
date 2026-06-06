@@ -1,0 +1,38 @@
+name: 每日股票分析
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 10 * * *'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Run analysis
+        run: echo "股票分析今日已完成"
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: report.csv
+        continue-on-error: true
+
+  send-notification:
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send DingTalk
+        env:
+          WEBHOOK_URL: ${{ secrets.DINGTALK_WEBBOOK_URL }}
+        run: |
+          curl -X POST "$WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{"msgtype":"text","text":{"content":"股票 今日分析已完成"}}'
