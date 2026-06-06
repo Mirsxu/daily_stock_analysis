@@ -16,40 +16,38 @@ INDEX_LIST = {
     '创业板指': '399006.SZ'
 }
 
+# ---------- 自动获取股票中文名称（使用全市场快照缓存）----------
+_name_cache = None
+
 def get_stock_name(symbol):
-    """自动获取 A 股中文简称（带缓存）"""
+    global _name_cache
     code = symbol.split('.')[0]
-    if not hasattr(get_stock_name, 'cache'):
-        get_stock_name.cache = {}
-    if code in get_stock_name.cache:
-        return get_stock_name.cache[code]
+    
+    if _name_cache is None:
+        try:
+            print("正在加载全市场股票名称缓存...")
+            spot = ak.stock_zh_a_spot()
+            _name_cache = dict(zip(spot['代码'], spot['名称']))
+            print(f"缓存加载完成，共 {len(_name_cache)} 只股票")
+        except Exception as e:
+            print(f"全市场快照加载失败: {e}")
+            _name_cache = {}
+    
+    if code in _name_cache:
+        return _name_cache[code]
+    
+    # 备用：个股信息接口
     try:
-        # 优先用东方财富个股信息接口
         info = ak.stock_individual_info_em(symbol=code)
         name = info[info['item'] == '股票简称']['value'].values[0]
-        get_stock_name.cache[code] = name
+        _name_cache[code] = name
         return name
     except Exception as e:
-        print(f"AKShare 名称获取失败 ({code}): {e}, 尝试实时行情...")
-        try:
-            spot = ak.stock_zh_a_spot()
-            row = spot[spot['代码'] == code]
-            if not row.empty:
-                name = row['名称'].values[0]
-                get_stock_name.cache[code] = name
-                return name
-        except Exception as e2:
-            print(f"实时行情获取失败: {e2}")
-        # 最后备用
-        try:
-            ticker = yf.Ticker(symbol)
-            name = ticker.info.get('longName') or ticker.info.get('shortName') or code
-            get_stock_name.cache[code] = name
-            return name
-        except:
-            get_stock_name.cache[code] = code
-            return code
+        print(f"备用接口获取名称失败 {code}: {e}")
+        # 最后回退到代码本身
+        return code
 
+# ---------- 获取大盘指数 ----------
 def get_index_data():
     index_text = "【大盘指数】\n"
     for name, symbol in INDEX_LIST.items():
@@ -68,6 +66,7 @@ def get_index_data():
             index_text += f"{name}: 获取失败\n"
     return index_text
 
+# ---------- 获取个股数据 ----------
 def get_stock_data(symbol):
     try:
         ticker = yf.Ticker(symbol)
@@ -82,6 +81,7 @@ def get_stock_data(symbol):
     except Exception:
         return None, None, None
 
+# ---------- AI 分析 ----------
 def call_deepseek_for_analysis(stock_name, symbol, close, change_pct, volume, index_info):
     api_key = os.getenv('DEEPSEEK_API_KEY')
     if not api_key:
@@ -126,6 +126,7 @@ def call_deepseek_for_analysis(stock_name, symbol, close, change_pct, volume, in
     except Exception as e:
         return f"AI调用失败: {str(e)}"
 
+# ---------- 主流程 ----------
 def main():
     index_info = get_index_data()
     results = []
